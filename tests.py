@@ -19,6 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+import io
 import os
 import unittest
 from base64 import b64decode
@@ -52,6 +53,7 @@ class KDCProxyWSGITests(unittest.TestCase):
         (2, 2, 17, '', ('128.66.0.2', 88)),
         (2, 3, 0, '', ('128.66.0.2', 88))
     ]
+    max_request_size = config.MetaResolver.DEFAULT_MAX_REQUEST_SIZE
 
     def setUp(self):  # noqa
         self.app = kdcproxy.Application()
@@ -59,12 +61,14 @@ class KDCProxyWSGITests(unittest.TestCase):
         self.await_reply.return_value = b'RESPONSE'
         self.resolver = self.app._Application__resolver = mock.Mock()
         self.resolver.lookup.return_value = ["kerberos://k1.kdcproxy.test.:88"]
+        self.resolver.max_request_size.return_value = self.max_request_size
         self.tapp = TestApp(self.app)
 
-    def post(self, body, expect_errors=False):
+    def post(self, body, expect_errors=False, headers=()):
+        hdr = [("Content-Type", "application/kerberos")]
+        hdr.extend(headers)
         return self.tapp.post(
-            '/', body, [("Content-Type", "application/kerberos")],
-            expect_errors=expect_errors
+            '/', body, hdr, expect_errors=expect_errors
         )
 
     def assert_response(self, response):
@@ -118,6 +122,41 @@ class KDCProxyWSGITests(unittest.TestCase):
         self.resolver.lookup.assert_called_once_with('FREEIPA.LOCAL',
                                                      kpasswd=True)
         self.assertEqual(response.status_code, 503)
+
+    def test_max_request_size(self):
+        mrs = self.max_request_size
+
+        r = self.post(b'a' * mrs, expect_errors=True)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.body, b'2-octet short')
+
+        r = self.post(b'a' * (mrs+1), expect_errors=True)
+        self.assertEqual(r.status_code, 413)
+        self.assertEqual(r.body, b'Payload Too Large: 102401')
+
+        # cannot test this special circumstances with WebTest
+        status = []
+
+        def start_response(s, _):
+            status.append(s)
+
+        env = {
+            "REQUEST_METHOD": "POST",
+            "CONTENT_LENGTH": -1
+        }
+        response = self.app(env, start_response)
+        self.assertEqual(status, ["400 Bad Request"])
+        self.assertEqual(response, [b"Negative request size"])
+        status[:] = []
+
+        env = {
+            "REQUEST_METHOD": "POST",
+            "wsgi.input": io.BytesIO(b'a' * (mrs+1))
+        }
+        response = self.app(env, start_response)
+        self.assertEqual(status, ["413 Request Entity Too Large"])
+        self.assertEqual(response, [b"Payload Too Large"])
+        status[:] = []
 
 
 def decode(data):

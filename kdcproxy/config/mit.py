@@ -272,6 +272,9 @@ class MITConfig(IConfig):
     def use_dns(self, default=True):
         return self.__config["dns"]
 
+    def max_request_size(self):
+        return None
+
 if __name__ == "__main__":
     from pprint import pprint
     with KRB5Profile() as prof:

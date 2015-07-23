@@ -46,6 +46,10 @@ class IConfig(IResolver):
         "Returns whether or not DNS should be used. Returns None if not set."
         raise NotImplementedError()
 
+    def max_request_size(self):
+        "Returns maximum length of POST request body. Returns None if not set."
+        raise NotImplementedError(self)
+
 
 class KDCProxyConfig(IConfig):
     GLOBAL = "global"
@@ -85,6 +89,12 @@ class KDCProxyConfig(IConfig):
         except configparser.Error:
             return None
 
+    def max_request_size(self):
+        try:
+            return self.__cp.getint(self.GLOBAL, "max_request_size")
+        except configparser.Error:
+            return None
+
 
 class DNSResolver(IResolver):
 
@@ -121,6 +131,7 @@ class MetaResolver(IResolver):
     SCHEMES = ("kerberos", "kerberos+tcp", "kerberos+udp",
                "kpasswd", "kpasswd+tcp", "kpasswd+udp",
                "http", "https",)
+    DEFAULT_MAX_REQUEST_SIZE = 102400  # 100 kB
 
     def __init__(self):
         self.__resolvers = []
@@ -136,6 +147,14 @@ class MetaResolver(IResolver):
                 logging.log(logging.WARNING,
                             "Error instantiating %s due to %s" % fmt)
         assert self.__resolvers
+
+        # Get max request size
+        self.max_request_size = self.DEFAULT_MAX_REQUEST_SIZE
+        for cfg in self.__resolvers:
+            tmp = cfg.max_request_size()
+            if tmp is not None:
+                self.max_request_size = tmp
+                break
 
         # See if we should use DNS
         dns = None

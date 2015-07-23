@@ -58,10 +58,14 @@ configure kdcproxy is the master configuration file. This file exists at the
 location specified in the environment variable KDCPROXY_CONFIG. If this
 variable is unspecified, the default location is /etc/kdcproxy.conf. This
 configuration file takes precedence over all other configuration modules. This
-file is an ini-style configuration with a special section **[global]**. Two
-parameters are available in this section: **configs** and **use_dns**.
+file is an ini-style configuration with a special section **[global]**. Three
+parameters are available in this section: **configs**, **max_request_size**
+and **use_dns**.
 
 The **use_dns** allows you to enable or disable use of DNS SRV record lookups.
+
+The **max_request_size** options lets you restrict the maximum size of a POST
+request. By default the size is restricted to 100 kiB.
 
 The **configs** parameter allows you to load other configuration modules for
 finding configuration in other places. The configuration modules specified in

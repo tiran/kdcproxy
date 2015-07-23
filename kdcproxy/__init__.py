@@ -34,6 +34,8 @@ except ImportError:  # Python 2.x
     import httplib
     import urlparse
 
+from pyasn1.error import PyAsn1Error
+
 import kdcproxy.codec as codec
 from kdcproxy.config import MetaResolver
 
@@ -176,15 +178,31 @@ class Application:
             if method != "POST":
                 raise HTTPException(405, "Method not allowed (%s)." % method)
 
-            # Parse the request
+            # Read body
+            max_request_size = self.__resolver.max_request_size()
             try:
                 length = int(env["CONTENT_LENGTH"])
-            except AttributeError:
-                length = -1
+            except KeyError:
+                length = None
+            if length is not None:
+                if length < 0:
+                    raise HTTPException(400, "Negative request size")
+                if length > max_request_size:
+                    raise HTTPException(413, "Payload Too Large: %s" % length)
+                body = env["wsgi.input"].read(length)
+            else:  # no content_length
+                # read one additional byte and check if body flows over.
+                body = env["wsgi.input"].read(max_request_size + 1)
+                if len(body) > max_request_size:
+                    raise HTTPException(413, "Payload Too Large")
+
+            # Parse the request
             try:
-                pr = codec.decode(env["wsgi.input"].read(length))
+                pr = codec.decode(body)
             except codec.ParsingError as e:
                 raise HTTPException(400, e.message)
+            except PyAsn1Error as e:
+                raise HTTPException(400, str(e))
 
             # Find the remote proxy
             servers = self.__resolver.lookup(
