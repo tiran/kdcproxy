@@ -34,8 +34,8 @@ except ImportError:  # Python 2.x
     import httplib
     import urlparse
 
-import kdcproxy.codec as codec
 from kdcproxy.config import MetaResolver
+import kkdcpasn1
 
 
 class HTTPException(Exception):
@@ -190,14 +190,14 @@ class Application:
             if length > self.MAX_LENGTH:
                 raise HTTPException(413, "Request entity too large.")
             try:
-                pr = codec.decode(env["wsgi.input"].read(length))
+                pr = kkdcpasn1.decode_kkdcp_request(env["wsgi.input"].read(length))
             except codec.ParsingError as e:
                 raise HTTPException(400, e.message)
 
             # Find the remote proxy
             servers = self.__resolver.lookup(
                 pr.realm,
-                kpasswd=isinstance(pr, codec.KPASSWDProxyRequest)
+                kpasswd=pr.request_type == 'kpasswd'
             )
             if not servers:
                 raise HTTPException(503, "Can't find remote (%s)." % pr)
@@ -275,7 +275,7 @@ class Application:
                 raise HTTPException(503, "Remote unavailable (%s)." % pr)
 
             # Return the result to the client
-            raise HTTPException(200, codec.encode(reply),
+            raise HTTPException(200, kkdcpasn1.wrap_kkdcp_response(reply),
                                 [("Content-Type", "application/kerberos")])
         except HTTPException as e:
             start_response(str(e), e.headers)

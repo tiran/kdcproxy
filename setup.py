@@ -44,7 +44,7 @@ setup(
     url="http://github.com/npmccallum/kdcproxy",
     packages=['kdcproxy', 'kdcproxy.config'],
     long_description=read('README'),
-    requires=['pyasn1', dns],
+    install_requires=[dns, 'kkdcpasn1 >= 0.2'],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Environment :: Web Environment",
